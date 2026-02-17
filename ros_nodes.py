@@ -6,39 +6,23 @@ from std_msgs.msg import String
 from enum import Enum
 import json
 
+# Topic names: cv_camera, telem, camera, targets, bbox
 
-class ExampleState(Enum):
-    IDLE = 0
-    RUNNING = 1
-    COMPLETE = 2
-
-
-class ExampleNode(Node):
+class StichingNode(Node):
 
     def __init__(self):
         super().__init__('example_node')
 
         # -------------------------
-        # State Machine
+        # Publisher (does )
         # -------------------------
-        self.state = ExampleState.IDLE
-        self._entered_state_once = False
-
-        # -------------------------
-        # Publisher
-        # -------------------------
-        self.publisher_ = self.create_publisher(
-            String,
-            'example_topic',
-            10
-        )
 
         # -------------------------
         # Subscriber
         # -------------------------
         self.subscription = self.create_subscription(
             String,
-            'input_topic',
+            'cv_camera',
             self.subscriber_callback,
             10
         )
@@ -98,36 +82,177 @@ class ExampleNode(Node):
     # ==========================================================
     # State Machine Handling
     # ==========================================================
-    def transition_to(self, new_state: ExampleState):
-        if new_state == self.state and self._entered_state_once:
-            return
+    # def transition_to(self, new_state: ExampleState):
 
-        self.get_logger().info(
-            f"State change: {self.state.name} -> {new_state.name}"
+    # def on_enter_state(self, state: ExampleState):
+
+class CameraNode(Node):
+
+    def __init__(self):
+        super().__init__('example_node')
+
+        # -------------------------
+        # State Machine
+        # -------------------------
+
+        # -------------------------
+        # Publisher
+        # -------------------------
+        self.publisher_ = self.create_publisher(
+            String,
+            'cv_camera',
+            10
         )
 
-        self.state = new_state
-        self._entered_state_once = False
-        self.on_enter_state(new_state)
+        # -------------------------
+        # Subscriber
+        # -------------------------
+        self.subscription = self.create_subscription(
+            String,
+            'telem',
+            self.subscriber_callback,
+            10
+        )
 
-    def on_enter_state(self, state: ExampleState):
+        self.subscription = self.create_subscription(
+            String,
+            'camera',
+            self.subscriber_callback,
+            10
+        )
+
+        # -------------------------
+        # Timer (runs every 1 second)
+        # -------------------------
+        self.timer = self.create_timer(
+            1.0,
+            self.timer_callback
+        )
+
+        self.get_logger().info('Example Node has started.')
+
+    # ==========================================================
+    # Subscriber Callback
+    # ==========================================================
+    def subscriber_callback(self, msg):
         """
-        Actions that run once when entering a state.
+        Called whenever a message is received on 'input_topic'.
         """
-        if self._entered_state_once:
-            return
+        self.get_logger().info(f"Received: {msg.data}")
 
-        if state == ExampleState.IDLE:
-            self.get_logger().info("Entered IDLE state.")
+        try:
+            data = json.loads(msg.data)
 
-        elif state == ExampleState.RUNNING:
-            self.get_logger().info("Entered RUNNING state.")
+        except json.JSONDecodeError:
+            self.get_logger().warn("Received invalid JSON")
 
-        elif state == ExampleState.COMPLETE:
-            self.get_logger().info("Entered COMPLETE state.")
+    # ==========================================================
+    # Timer Callback
+    # ==========================================================
+    def timer_callback(self):
+        """
+        Runs periodically (based on timer frequency).
+        Good for status publishing, health checks, etc.
+        """
 
-        self._entered_state_once = True
+    # ==========================================================
+    # Publisher Helper
+    # ==========================================================
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.publisher_.publish(msg)
+        self.get_logger().info(f"Published: {text}")
 
+    # ==========================================================
+    # State Machine Handling
+    # ==========================================================
+    # def transition_to(self, new_state: ExampleState):
+    
+    # def on_enter_state(self, state: ExampleState):
+
+class ODLCNode(Node):
+
+    def __init__(self):
+        super().__init__('example_node')
+
+        # -------------------------
+        # State Machine
+        # -------------------------
+
+        # -------------------------
+        # Publisher
+        # -------------------------
+        self.publisher_ = self.create_publisher(
+            String,
+            'targets',
+            10
+        )
+
+        self.publisher_ = self.create_publisher(
+            String,
+            'bbox',
+            10
+        )
+
+        # -------------------------
+        # Subscriber
+        # -------------------------
+        self.subscription = self.create_subscription(
+            String,
+            'cv_camera',
+            self.subscriber_callback,
+            10
+        )
+
+        # -------------------------
+        # Timer (runs every 1 second)
+        # -------------------------
+        self.timer = self.create_timer(
+            1.0,
+            self.timer_callback
+        )
+
+        self.get_logger().info('Example Node has started.')
+
+    # ==========================================================
+    # Subscriber Callback
+    # ==========================================================
+    def subscriber_callback(self, msg):
+        """
+        Called whenever a message is received on 'input_topic'.
+        """
+        self.get_logger().info(f"Received: {msg.data}")
+
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            self.get_logger().warn("Received invalid JSON")
+
+    # ==========================================================
+    # Timer Callback
+    # ==========================================================
+    def timer_callback(self):
+        """
+        Runs periodically (based on timer frequency).
+        Good for status publishing, health checks, etc.
+        """
+
+    # ==========================================================
+    # Publisher Helper
+    # ==========================================================
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.publisher_.publish(msg)
+        self.get_logger().info(f"Published: {text}")
+
+    # ==========================================================
+    # State Machine Handling
+    # ==========================================================
+    # def transition_to(self, new_state: ExampleState):
+
+    # def on_enter_state(self, state: ExampleState):
 
 # ==========================================================
 # Main Entry Point
@@ -135,7 +260,7 @@ class ExampleNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    node = ExampleNode()
+    node = CameraNode()
     rclpy.spin(node)
 
     node.destroy_node()
