@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import rclpy
+import numpy as np
+from localization import triangulate_two_rays
 from rclpy.node import Node
 from std_msgs.msg import String
 from enum import Enum
@@ -11,7 +13,7 @@ import json
 class StichingNode(Node):
 
     def __init__(self):
-        super().__init__('example_node')
+        super().__init__('stiching_node')
 
         # -------------------------
         # Publisher (does )
@@ -89,7 +91,7 @@ class StichingNode(Node):
 class CameraNode(Node):
 
     def __init__(self):
-        super().__init__('example_node')
+        super().__init__('_node')
 
         # -------------------------
         # State Machine
@@ -174,8 +176,17 @@ class CameraNode(Node):
 class ODLCNode(Node):
 
     def __init__(self):
-        super().__init__('example_node')
+        super().__init__('odlc_node')
 
+        # ---- Camera Parameters ----
+        self.K = np.array([
+            [800.0, 0.0, 640.0],
+            [0.0, 800.0, 360.0],
+            [0.0, 0.0, 1.0]
+        ])#replace with real values here
+
+        self.R = np.eye(3)
+        self.t = np.zeros((3,1))
         # -------------------------
         # State Machine
         # -------------------------
@@ -183,13 +194,13 @@ class ODLCNode(Node):
         # -------------------------
         # Publisher
         # -------------------------
-        self.publisher_ = self.create_publisher(
+        self.targets_pub = self.create_publisher(
             String,
             'targets',
             10
         )
 
-        self.publisher_ = self.create_publisher(
+        self.bbox_pub = self.create_publisher(
             String,
             'bbox',
             10
@@ -223,9 +234,35 @@ class ODLCNode(Node):
         Called whenever a message is received on 'input_topic'.
         """
         self.get_logger().info(f"Received: {msg.data}")
-
         try:
             data = json.loads(msg.data)
+            # Example expected message format:
+            # {
+            #   "pt1": [u1, v1],
+            #   "pt2": [u2, v2],
+            #   "t2": [x, y, z]
+            # }
+
+            pt1 = np.array(data["pt1"])
+            pt2 = np.array(data["pt2"])
+
+            t2 = np.array(data["t2"]).reshape((3,1))
+
+            point_3d = triangulate_two_rays(
+                pt1,
+                pt2,
+                self.K,
+                self.K,
+                self.R,
+                self.t,
+                self.R,
+                t2
+            )
+
+            self.publish_target(point_3d)
+
+        except Exception as e:
+            self.get_logger().error(str(e))
         except json.JSONDecodeError:
             self.get_logger().warn("Received invalid JSON")
 
@@ -244,9 +281,22 @@ class ODLCNode(Node):
     def publish_status(self, text):
         msg = String()
         msg.data = text
-        self.publisher_.publish(msg)
+        
+        self.targets_pub.publish(msg)
+        self.bbox_pub.publish(msg)
         self.get_logger().info(f"Published: {text}")
 
+    def publish_target(self, point):
+
+        msg = String()
+        msg.data = json.dumps({
+            "x": float(point[0]),
+            "y": float(point[1]),
+            "z": float(point[2])
+        })
+
+        self.targets_pub.publish(msg)
+        self.get_logger().info(f"Published target: {msg.data}")
     # ==========================================================
     # State Machine Handling
     # ==========================================================
