@@ -173,6 +173,137 @@ class CameraNode(Node):
     
     # def on_enter_state(self, state: ExampleState):
 
+class ClassificationNode(Node):
+    def __init__(self):
+        super().__init__('odlc_node')
+
+        # ---- Camera Parameters ----
+        self.K = np.array([
+            [800.0, 0.0, 640.0],
+            [0.0, 800.0, 360.0],
+            [0.0, 0.0, 1.0]
+        ])#replace with real values here
+
+        self.R = np.eye(3)
+        self.t = np.zeros((3,1))
+        # -------------------------
+        # State Machine
+        # -------------------------
+
+        # -------------------------
+        # Publisher
+        # -------------------------
+        self.targets_pub = self.create_publisher(
+            String,
+            'targets',
+            10
+        )
+
+        self.bbox_pub = self.create_publisher(
+            String,
+            'bbox',
+            10
+        )
+
+        # -------------------------
+        # Subscriber
+        # -------------------------
+        self.subscription = self.create_subscription(
+            String,
+            'cv_camera',
+            self.subscriber_callback,
+            10
+        )
+
+        # -------------------------
+        # Timer (runs every 1 second)
+        # -------------------------
+        self.timer = self.create_timer(
+            1.0,
+            self.timer_callback
+        )
+
+        self.get_logger().info('Example Node has started.')
+
+    # ==========================================================
+    # Subscriber Callback
+    # ==========================================================
+    def subscriber_callback(self, msg):
+        """
+        Called whenever a message is received on 'input_topic'.
+        """
+        self.get_logger().info(f"Received: {msg.data}")
+        try:
+            data = json.loads(msg.data)
+            # Example expected message format:
+            # {
+            #   "pt1": [u1, v1],
+            #   "pt2": [u2, v2],
+            #   "t2": [x, y, z]
+            # }
+
+            pt1 = np.array(data["pt1"])
+            pt2 = np.array(data["pt2"])
+
+            t2 = np.array(data["t2"]).reshape((3,1))
+
+            point_3d = triangulate_two_rays(
+                pt1,
+                pt2,
+                self.K,
+                self.K,
+                self.R,
+                self.t,
+                self.R,
+                t2
+            )
+
+            self.publish_target(point_3d)
+
+        except Exception as e:
+            self.get_logger().error(str(e))
+        except json.JSONDecodeError:
+            self.get_logger().warn("Received invalid JSON")
+
+    # ==========================================================
+    # Timer Callback
+    # ==========================================================
+    def timer_callback(self):
+        """
+        Runs periodically (based on timer frequency).
+        Good for status publishing, health checks, etc.
+        """
+
+    # ==========================================================
+    # Publisher Helper
+    # ==========================================================
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        
+        self.targets_pub.publish(msg)
+        self.bbox_pub.publish(msg)
+        self.get_logger().info(f"Published: {text}")
+
+    def publish_target(self, point):
+
+        msg = String()
+        msg.data = json.dumps({
+            "x": float(point[0]),
+            "y": float(point[1]),
+            "z": float(point[2])
+        })
+
+        self.targets_pub.publish(msg)
+        self.get_logger().info(f"Published target: {msg.data}")
+    # ==========================================================
+    # State Machine Handling
+    # ==========================================================
+    # def transition_to(self, new_state: ExampleState):
+
+    # def on_enter_state(self, state: ExampleState):
+
+
 class ODLCNode(Node):
 
     def __init__(self):
