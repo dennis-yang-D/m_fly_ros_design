@@ -176,32 +176,27 @@ class CameraNode(Node):
 class ClassificationNode(Node):
     def __init__(self):
         super().__init__('odlc_node')
+        # TODO: do classification stuff
 
-        # ---- Camera Parameters ----
-        self.K = np.array([
-            [800.0, 0.0, 640.0],
-            [0.0, 800.0, 360.0],
-            [0.0, 0.0, 1.0]
-        ])#replace with real values here
-
-        self.R = np.eye(3)
-        self.t = np.zeros((3,1))
         # -------------------------
-        # State Machine
+        # State Machine 
         # -------------------------
 
         # -------------------------
         # Publisher
         # -------------------------
-        self.targets_pub = self.create_publisher(
+
+        # Sends the points to the ODLC nodes
+        self.classified_points_pub = self.create_publisher(
             String,
-            'targets',
+            'classified_points', # you can shorten this name if you want to
             10
         )
 
-        self.bbox_pub = self.create_publisher(
+        # Stores the detections in the folder
+        self.detections_pub = self.create_publisher(
             String,
-            'bbox',
+            'detections',
             10
         )
 
@@ -237,26 +232,9 @@ class ClassificationNode(Node):
             data = json.loads(msg.data)
             # Example expected message format:
             # {
-            #   "pt1": [u1, v1],
-            #   "pt2": [u2, v2],
-            #   "t2": [x, y, z]
+            #   "file_path": \raw\path\to\image,
             # }
 
-            pt1 = np.array(data["pt1"])
-            pt2 = np.array(data["pt2"])
-
-            t2 = np.array(data["t2"]).reshape((3,1))
-
-            point_3d = triangulate_two_rays(
-                pt1,
-                pt2,
-                self.K,
-                self.K,
-                self.R,
-                self.t,
-                self.R,
-                t2
-            )
 
             self.publish_target(point_3d)
 
@@ -286,7 +264,6 @@ class ClassificationNode(Node):
         self.get_logger().info(f"Published: {text}")
 
     def publish_target(self, point):
-
         msg = String()
         msg.data = json.dumps({
             "x": float(point[0]),
@@ -342,7 +319,7 @@ class ODLCNode(Node):
         # -------------------------
         self.subscription = self.create_subscription(
             String,
-            'cv_camera',
+            'classified_points',
             self.subscriber_callback,
             10
         )
